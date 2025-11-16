@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Designações RVM - Google AI Studio</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎯 Designações da Reunião Vida e Ministério</h1>
+            <p class="subtitle">Desenvolvido com Google AI Studio - 100% AI-Driven Development</p>
+        </header>
+
+        <div class="main-content">
+            <section class="config-section">
+                <h2>Configuração da API</h2>
+                <div class="api-config">
+                    <label for="api-key">Chave da API Google AI Studio:</label>
+                    <input type="password" id="api-key" placeholder="Cole sua chave da API aqui">
+                    <button id="save-key" class="btn btn-primary">Salvar Chave</button>
+                    <span id="key-status" class="status"></span>
+                </div>
+            </section>
+
+            <section class="meeting-section">
+                <h2>Gerar Designações</h2>
+                <div class="meeting-form">
+                    <div class="form-group">
+                        <label for="meeting-date">Data da Reunião:</label>
+                        <input type="date" id="meeting-date">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="participants">Participantes (um por linha):</label>
+                        <textarea id="participants" rows="6" placeholder="Nome1&#10;Nome2&#10;Nome3"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="parts">Partes da Reunião (um por linha):</label>
+                        <textarea id="parts" rows="6" placeholder="Presidente&#10;Discurso 1&#10;Leitor&#10;Vídeo Inicial&#10;Primeira Conversa"></textarea>
+                    </div>
+
+                    <button id="generate-assignments" class="btn btn-primary">🤖 Gerar com IA</button>
+                </div>
+            </section>
+
+            <section class="results-section" id="results-section" style="display: none;">
+                <h2>Designações Geradas</h2>
+                <div id="assignments-container" class="assignments"></div>
+                <div class="action-buttons">
+                    <button id="copy-assignments" class="btn btn-secondary">📋 Copiar</button>
+                    <button id="print-assignments" class="btn btn-secondary">🖨️ Imprimir</button>
+                    <button id="download-assignments" class="btn btn-secondary">💾 Baixar</button>
+                </div>
+            </section>
+
+            <section class="history-section">
+                <h2>Histórico de Designações</h2>
+                <div id="history-container" class="history">
+                    <p class="empty-state">Nenhuma designação gerada ainda.</p>
+                </div>
+            </section>
+        </div>
+
+        <footer>
+            <p>🤖 Desenvolvido inteiramente através de interações Dev-AI com Google AI Studio</p>
+            <p>Sem codificação humana - 100% AI-Generated Code</p>
+        </footer>
+    </div>
+
+    <div id="loading-overlay" class="loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+        <p>Gerando designações com IA...</p>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
