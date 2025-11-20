@@ -5,6 +5,7 @@ import { parseScheduleFromPdf } from './pdfParser';
 import { calculatePartDate, PAIRABLE_PART_TYPES, validatePairing } from './utils';
 
 let ai: GoogleGenAI | null = null;
+const isPublisherActive = (publisher: Publisher) => publisher.isServing ?? true;
 
 function getAiInstance(): GoogleGenAI {
     if (!ai) {
@@ -83,7 +84,7 @@ export async function generateAiSchedule(
         const meetingDate = calculatePartDate(week).split('T')[0];
 
         const availablePublishers = publishers.filter(p => {
-            if (!p.isServing) return false;
+            if (!isPublisherActive(p)) return false;
             if (p.availability.mode === 'always') return !p.availability.exceptionDates.includes(meetingDate);
             return p.availability.exceptionDates.includes(meetingDate);
         });
