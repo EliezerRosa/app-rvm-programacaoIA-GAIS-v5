@@ -1,0 +1,5 @@
+{
+  "name": "designacao-rvm-github-pages",
+  "description": "Um aplicativo CRUD para gerenciar publicadores, histórico de participações e apostilas das reuniões, com armazenamento local persistente.",
+  "requestFramePermissions": []
+}
