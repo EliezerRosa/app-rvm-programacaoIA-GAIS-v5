@@ -1,4 +1,3 @@
-
 // FIX: Created a proper types.ts file to export all shared types.
 export interface PublisherPrivileges {
     canGiveTalks: boolean;

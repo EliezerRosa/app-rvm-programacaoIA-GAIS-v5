@@ -4,18 +4,22 @@
   "description": "App de Designações RVM",
   "type": "module",
   "scripts": {
+    "dev": "vite",
     "build": "node build.mjs"
   },
   "dependencies": {
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "@google/genai": "^1.29.0",
     "dexie": "^4.2.1",
-    "@google/genai": "^1.29.0"
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "esbuild": "^0.21.4",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "typescript": "^5.4.5"
+    "@vitejs/plugin-react": "^4.1.0",
+    "dotenv": "^17.2.3",
+    "esbuild": "^0.21.4",
+    "typescript": "^5.4.5",
+    "vite": "^5.4.0"
   }
 }

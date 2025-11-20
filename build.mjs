@@ -1,6 +1,10 @@
 import esbuild from 'esbuild';
 import fs from 'fs/promises';
 import path from 'path';
+import dotenv from 'dotenv';
+
+dotenv.config({ path: '.env.local', override: false });
+dotenv.config({ override: false });
 
 const distDir = 'dist';
 
@@ -15,7 +19,10 @@ async function build() {
     // 2. Configura a chave da API
     // ATENÇÃO: Em um ambiente de produção real, chaves de API não devem ser expostas no front-end.
     // Se estiver usando GitHub Actions, configure o secret GEMINI_API_KEY lá.
-    const apiKey = process.env.GEMINI_API_KEY || '';
+    if (!process.env.API_KEY && process.env.GEMINI_API_KEY) {
+      process.env.API_KEY = process.env.GEMINI_API_KEY;
+    }
+    const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || '';
     if (!apiKey) {
         console.warn('AVISO: A variável de ambiente GEMINI_API_KEY não foi definida. As funções de IA podem falhar.');
     }

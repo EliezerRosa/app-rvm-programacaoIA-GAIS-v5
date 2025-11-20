@@ -326,6 +326,8 @@ const StatCard: React.FC<{ title: string; value: string | number; icon?: React.R
 
 // --- Helpers de Cálculo ---
 
+const isPublisherActive = (publisher: Publisher) => publisher.isServing ?? true;
+
 const calculatePublisherStats = (publishers: Publisher[], participations: Participation[]): PublisherStats[] => {
     const publisherMap = new Map<string, Publisher>(publishers.map(p => [p.name, p]));
     const participationsByPublisher = new Map<string, Participation[]>();
@@ -340,7 +342,7 @@ const calculatePublisherStats = (publishers: Publisher[], participations: Partic
         }
     }
 
-    return publishers.filter(p => p.isServing).map(p => {
+    return publishers.filter(isPublisherActive).map(p => {
         const publisherParts = participationsByPublisher.get(p.id) || [];
         
         let countTreasures = 0;
@@ -403,7 +405,7 @@ const StatisticsDashboard: React.FC<StatisticsDashboardProps> = ({ publishers, p
 
     // Counts for Summary
     const totalPublishers = publishers.length;
-    const activePublishers = publishers.filter(p => p.isServing).length;
+    const activePublishers = publishers.filter(isPublisherActive).length;
     const inactivePublishers = totalPublishers - activePublishers;
 
     // --- Lógica de Evolução (ROBUSTA para Datas) ---
@@ -430,10 +432,10 @@ const StatisticsDashboard: React.FC<StatisticsDashboardProps> = ({ publishers, p
         const referenceDate = latestDate.getTime() < today.getTime() ? today : latestDate; 
         
         // Publicadores que DEVEM receber parte (Atuantes)
-        const activePublisherNames = new Set(publishers.filter(p => p.isServing).map(p => p.name));
+        const activePublisherNames = new Set(publishers.filter(isPublisherActive).map(p => p.name));
         
         // Número de inativos (Constante para o gráfico atual, pois não temos histórico de status)
-        const currentInactiveCount = publishers.filter(p => !p.isServing).length;
+        const currentInactiveCount = publishers.filter(p => !isPublisherActive(p)).length;
 
         for (let i = 5; i >= 0; i--) {
             const d = new Date(referenceDate.getFullYear(), referenceDate.getMonth() - i, 1);
@@ -623,6 +625,7 @@ const StatisticsDashboard: React.FC<StatisticsDashboardProps> = ({ publishers, p
                         />
                         {searchTerm && (
                             <button 
+                                aria-label="Limpar busca"
                                 onClick={() => setSearchTerm('')}
                                 className="absolute right-2 top-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
                             >
