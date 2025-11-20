@@ -132,11 +132,22 @@ const App: React.FC = () => {
 
     const handleEditWeek = (m: MeetingData) => { setScheduleToEdit(m); setIsScheduleFormOpen(true); };
     
-    const handleSaveSchedule = async ({ parts, eventToUpdate }: { parts: Participation[], eventToUpdate?: SpecialEvent }) => {
-        await Promise.all(parts.map(p => saveParticipation(p)));
-        if (eventToUpdate) {
-            await saveSpecialEvent(eventToUpdate);
+    const handleSaveSchedule = async ({ parts, eventToUpdate, updatedWeek, originalWeek }: { parts: Participation[]; eventToUpdate?: SpecialEvent; updatedWeek: string; originalWeek: string }) => {
+        const weekChanged = updatedWeek && updatedWeek !== originalWeek;
+        const persistableParts = parts.map(part => {
+            if (!weekChanged) return part;
+            return { ...part, week: updatedWeek, date: calculatePartDate(updatedWeek) };
+        });
+        await Promise.all(persistableParts.map(p => saveParticipation(p)));
+
+        if (eventToUpdate || weekChanged) {
+            let eventPayload = eventToUpdate ? { ...eventToUpdate } : specialEvents.find(e => e.week === originalWeek);
+            if (eventPayload) {
+                if (weekChanged) eventPayload.week = updatedWeek;
+                await saveSpecialEvent(eventPayload);
+            }
         }
+
         loadData();
     };
     

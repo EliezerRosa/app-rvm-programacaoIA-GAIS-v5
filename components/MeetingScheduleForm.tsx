@@ -5,7 +5,7 @@ import { TimedEvent, getFullScheduleWithTimings } from '../lib/scheduleUtils';
 interface MeetingScheduleFormProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (meetingData: { parts: Participation[], eventToUpdate?: SpecialEvent }) => void;
+  onSave: (meetingData: { parts: Participation[]; eventToUpdate?: SpecialEvent; updatedWeek: string; originalWeek: string }) => void;
   scheduleToEdit: MeetingData | null;
   publishers: Publisher[];
   specialEvents: SpecialEvent[];
@@ -15,22 +15,23 @@ interface MeetingScheduleFormProps {
 const MeetingScheduleForm: React.FC<MeetingScheduleFormProps> = ({ isOpen, onClose, onSave, scheduleToEdit, publishers, specialEvents, eventTemplates }) => {
   const [partsToDisplay, setPartsToDisplay] = useState<TimedEvent[]>([]);
   const [modifiedData, setModifiedData] = useState<Record<string, { publisherName: string, partTitle: string }>>({});
+  const [weekLabel, setWeekLabel] = useState('');
 
   useEffect(() => {
     if (scheduleToEdit) {
       const timedSchedule = getFullScheduleWithTimings(scheduleToEdit, publishers, specialEvents, eventTemplates);
       setPartsToDisplay(timedSchedule);
-      
-      // Initialize modifiedData with current values
+      setWeekLabel(scheduleToEdit.week);
+
       const initialModifications: Record<string, { publisherName: string, partTitle: string }> = {};
       timedSchedule.forEach(event => {
         initialModifications[event.id] = { publisherName: event.publisherName, partTitle: event.partTitle };
       });
       setModifiedData(initialModifications);
-
     } else {
       setPartsToDisplay([]);
       setModifiedData({});
+      setWeekLabel('');
     }
   }, [scheduleToEdit, publishers, specialEvents, eventTemplates]);
 
@@ -46,6 +47,7 @@ const MeetingScheduleForm: React.FC<MeetingScheduleFormProps> = ({ isOpen, onClo
     if (!scheduleToEdit) return;
 
     const originalParts = scheduleToEdit.parts;
+    const trimmedWeek = weekLabel.trim() || scheduleToEdit.week;
     let eventToUpdate: SpecialEvent | undefined = undefined;
 
     const updatedParts = originalParts.map(part => {
@@ -56,14 +58,24 @@ const MeetingScheduleForm: React.FC<MeetingScheduleFormProps> = ({ isOpen, onClo
     });
 
     const eventForWeek = specialEvents.find(e => e.week === scheduleToEdit.week);
-    if (eventForWeek && modifiedData[eventForWeek.id]) {
-        const modifiedEventData = modifiedData[eventForWeek.id];
-        if (modifiedEventData.publisherName !== eventForWeek.assignedTo) {
-             eventToUpdate = { ...eventForWeek, assignedTo: modifiedEventData.publisherName };
-        }
+    if (eventForWeek) {
+      const modifiedEventData = modifiedData[eventForWeek.id];
+      const nextEvent = { ...eventForWeek };
+      let hasEventChanges = false;
+      if (modifiedEventData && modifiedEventData.publisherName !== eventForWeek.assignedTo) {
+        nextEvent.assignedTo = modifiedEventData.publisherName;
+        hasEventChanges = true;
+      }
+      if (trimmedWeek !== scheduleToEdit.week) {
+        nextEvent.week = trimmedWeek;
+        hasEventChanges = true;
+      }
+      if (hasEventChanges) {
+        eventToUpdate = nextEvent;
+      }
     }
 
-    onSave({ parts: updatedParts, eventToUpdate });
+    onSave({ parts: updatedParts, eventToUpdate, updatedWeek: trimmedWeek, originalWeek: scheduleToEdit.week });
     onClose();
   };
   
@@ -72,10 +84,21 @@ const MeetingScheduleForm: React.FC<MeetingScheduleFormProps> = ({ isOpen, onClo
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center" onClick={onClose}>
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-3xl m-4 flex flex-col" style={{maxHeight: '90vh'}} onClick={e => e.stopPropagation()}>
-        <div className="p-6 pb-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+        <div className="p-6 pb-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 space-y-4">
           <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
             Editar Pauta - {scheduleToEdit.week}
           </h2>
+          <div>
+            <label htmlFor="week-field" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Semana</label>
+            <input
+              id="week-field"
+              type="text"
+              value={weekLabel}
+              onChange={(e) => setWeekLabel(e.target.value)}
+              className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-indigo-600 focus:border-indigo-600 sm:text-sm text-black"
+              placeholder="Ex.: 3-9 de FEV, 2025"
+            />
+          </div>
         </div>
         <form onSubmit={handleSubmit} className="flex-grow flex flex-col overflow-hidden">
             <div className="p-6 flex-grow overflow-y-auto">
