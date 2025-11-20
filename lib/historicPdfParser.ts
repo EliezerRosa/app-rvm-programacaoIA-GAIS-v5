@@ -107,12 +107,15 @@ const partNeedsHelper = (title: string): boolean => {
 const isTimeMarker = (text: string): boolean => /\b\d{1,2}:\d{2}\b/.test(text);
 const isWeekHeading = (text: string): boolean => text.toUpperCase().includes('SEMANA');
 const isPartHeading = (text: string): boolean => /^\d+\./.test(text.trim());
+const STOP_WORDS = ['ACONSELHAMENTO', 'COMENTÁRIOS INICIAIS', 'COMENTARIOS INICIAIS', 'COMENTÁRIOS FINAIS', 'COMENTARIOS FINAIS'];
+
 const isSectionBoundary = (text: string): boolean => {
     const upper = text.toUpperCase();
     return (
         isTimeMarker(text) ||
         isWeekHeading(text) ||
         isPartHeading(text) ||
+        STOP_WORDS.includes(upper) ||
         upper.startsWith('CÂNTICO') ||
         upper.startsWith('CANTICO') ||
         upper.startsWith('COMENT') ||
@@ -135,8 +138,8 @@ const normalizeCandidateName = (name: string): string => name.replace(/\s+/g, ' 
 
 const assignPendingNames = (
     names: string[],
-    queue: { partTitle: string }[],
-    participations: { partTitle: string; publisherName: string; order?: number }[],
+    queue: { partTitle: string; partNumber?: number }[],
+    participations: { partTitle: string; publisherName: string; order?: number; partNumber?: number }[],
     orderGenerator: () => number,
     isHelper = false
 ) => {
@@ -148,11 +151,7 @@ const assignPendingNames = (
         const target = queue.shift();
         if (!target) break;
 
-        if (isHelper) {
-            participations.push({ partTitle: 'Ajudante', publisherName: normalized, order: orderGenerator() });
-        } else {
-            participations.push({ partTitle: target.partTitle, publisherName: normalized, order: orderGenerator() });
-        }
+        participations.push({ partTitle: isHelper ? 'Ajudante' : target.partTitle, publisherName: normalized, order: orderGenerator(), partNumber: target.partNumber });
     }
 };
 
@@ -162,6 +161,30 @@ const isStandaloneName = (text: string): boolean => {
     if (!trimmed) return false;
     if (isSectionBoundary(trimmed) || isStudentHeaderLine(trimmed) || isHelperHeaderLine(trimmed) || isLocationHeaderLine(trimmed)) return false;
     if (/min\)/i.test(trimmed) || /^\d+$/.test(trimmed)) return false;
+    const detectDirigenteOrLeitorFromColumns = (
+        block: any[],
+        startIndex: number,
+        label: 'DIRIGENTE' | 'LEITOR',
+        runningOrderRef: { value: number },
+        participations: { partTitle: string; publisherName: string; order?: number }[],
+        pendingStudentParts: { partTitle: string }[]
+    ) => {
+        if (pendingStudentParts.length > 0) return;
+        const { names } = collectNamesAfterLine(block, startIndex, ['ESTUDANTE', 'ESTUDANTES', 'AJUDANTE', 'AJUDANTES', 'CÂNTICO', 'CANTICO']);
+        const targetName = names.find(name => !isSectionBoundary(name));
+        if (!targetName) return;
+        if (label === 'DIRIGENTE') {
+            participations.push({ partTitle: 'Estudo bíblico de congregação', publisherName: targetName, order: runningOrderRef.value++ });
+        } else {
+            participations.push({ partTitle: 'Leitor do EBC', publisherName: targetName, order: runningOrderRef.value++ });
+        }
+    };
+
+    const mapPartNumberToType = (partNumber: number): 'TESOUROS' | 'MINISTERIO' | 'VIDA_CRISTA' => {
+        if (partNumber <= 3) return 'TESOUROS';
+        if (partNumber <= 6) return 'MINISTERIO';
+        return 'VIDA_CRISTA';
+    };
     return /[A-Za-zÀ-ÿ]/.test(trimmed);
 };
 
@@ -271,8 +294,8 @@ export const parseHistoricPdf = async (file: File): Promise<HistoricalData[]> =>
             const weekLine = block[0].textWithSpaces;
             const normalizedWeek = standardizeWeekDate(weekLine, yearContext);
             const participations: { partTitle: string; publisherName: string; order?: number }[] = [];
-            const pendingStudentParts: { partTitle: string }[] = [];
-            const pendingHelperParts: { partTitle: string }[] = [];
+            const pendingStudentParts: { partTitle: string; partNumber?: number }[] = [];
+            const pendingHelperParts: { partTitle: string; partNumber?: number }[] = [];
             let presidentName = '';
             let runningOrder = 0;
 
@@ -297,7 +320,7 @@ export const parseHistoricPdf = async (file: File): Promise<HistoricalData[]> =>
                     continue;
                 }
 
-                if (upperText.startsWith('CÂNTICO') || upperText.startsWith('CANTICO')) {
+                if (upperText.includes('CÂNTICO') || upperText.includes('CANTICO')) {
                     const canticoTitle = text.replace(/\s+/g, ' ').trim();
                     participations.push({ partTitle: canticoTitle, publisherName: '', order: runningOrder++ });
                     continue;
@@ -320,7 +343,8 @@ export const parseHistoricPdf = async (file: File): Promise<HistoricalData[]> =>
                 if (partMatch) {
                     const rawTitle = partMatch[2].trim();
                     const partTitle = rawTitle; 
-                    const needsHelper = partNeedsHelper(partTitle);
+                    const partNumber = parseInt(partMatch[1], 10);
+                    const needsHelper = partNeedsHelper(partTitle) || mapPartNumberToType(partNumber) === 'MINISTERIO';
                     
                     // Encontra onde termina a duração visualmente
                     let anchorX = 0;
@@ -347,17 +371,17 @@ export const parseHistoricPdf = async (file: File): Promise<HistoricalData[]> =>
 
                     names = names.map(n => n.trim()).filter(Boolean);
                     if (names.length > 0) {
-                        participations.push({ partTitle, publisherName: names[0], order: runningOrder++ });
+                        participations.push({ partTitle, publisherName: names[0], order: runningOrder++, partNumber });
                         if (needsHelper) {
                             if (names[1]) {
                                 participations.push({ partTitle: 'Ajudante', publisherName: names[1], order: runningOrder++ });
                             } else {
-                                pendingHelperParts.push({ partTitle });
+                                pendingHelperParts.push({ partTitle, partNumber });
                             }
                         }
                     } else {
-                        pendingStudentParts.push({ partTitle });
-                        if (needsHelper) pendingHelperParts.push({ partTitle });
+                        pendingStudentParts.push({ partTitle, partNumber });
+                        if (needsHelper) pendingHelperParts.push({ partTitle, partNumber });
                     }
                     continue;
                 }
@@ -380,6 +404,10 @@ export const parseHistoricPdf = async (file: File): Promise<HistoricalData[]> =>
                     if (roleName) {
                         participations.push({ partTitle: 'Estudo bíblico de congregação', publisherName: roleName.name, order: runningOrder++ });
                         l = roleName.index;
+                    } else {
+                        const ref = { value: runningOrder };
+                        detectDirigenteOrLeitorFromColumns(block, l, 'DIRIGENTE', ref, participations, pendingStudentParts);
+                        runningOrder = ref.value;
                     }
                     continue;
                 }
@@ -389,6 +417,10 @@ export const parseHistoricPdf = async (file: File): Promise<HistoricalData[]> =>
                     if (roleName) {
                         participations.push({ partTitle: 'Leitor do EBC', publisherName: roleName.name, order: runningOrder++ });
                         l = roleName.index;
+                    } else {
+                        const ref = { value: runningOrder };
+                        detectDirigenteOrLeitorFromColumns(block, l, 'LEITOR', ref, participations, pendingStudentParts);
+                        runningOrder = ref.value;
                     }
                     continue;
                 }

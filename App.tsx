@@ -256,12 +256,20 @@ const App: React.FC = () => {
                     continue;
                 }
 
+                let inferredType = inferParticipationType(p.partTitle);
+                if (typeof (p as any).partNumber === 'number') {
+                    const number = (p as any).partNumber as number;
+                    if (number <= 3) inferredType = ParticipationType.TESOUROS;
+                    else if (number <= 6) inferredType = ParticipationType.MINISTERIO;
+                    else inferredType = ParticipationType.VIDA_CRISTA;
+                }
+
                 newParticipations.push({
                     id: generateUUID(),
                     publisherName: resolvedPublisherName,
                     week: weekData.week,
                     partTitle: p.partTitle,
-                    type: inferParticipationType(p.partTitle),
+                    type: inferredType,
                     date: calculatePartDate(weekData.week)
                 });
 
