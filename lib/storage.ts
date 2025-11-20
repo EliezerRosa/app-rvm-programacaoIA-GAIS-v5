@@ -159,7 +159,12 @@ export const deletePublisher = (id: string) => db.publishers.delete(id);
 // --- Participation Functions ---
 export const saveParticipation = (participation: Participation) => db.participations.put(participation);
 export const deleteParticipation = (id: string) => db.participations.delete(id);
-export const deleteParticipationsByWeek = (week: string) => db.participations.where('week').equals(week).delete();
+export const deleteParticipationsByWeek = async (week: string) => {
+    await Promise.all([
+        db.participations.where('week').equals(week).delete(),
+        db.historyBackup.where('week').equals(week).delete(),
+    ]);
+};
 
 
 // --- Workbook Functions ---

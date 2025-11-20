@@ -87,6 +87,129 @@ const splitNamesByGap = (textItems: any[], startX: number): string[] => {
         .filter(n => n.length > 2 && !/^\d+$/.test(n));
 };
 
+const partNeedsHelper = (title: string): boolean => {
+    const normalized = title.toLowerCase();
+    if (normalized.includes('discurso') || normalized.includes('necessidades locais') || normalized.includes('coment')) return false;
+    if (normalized.includes('estudo bíblico de congregação') || normalized.includes('estudo biblico de congregacao')) return false;
+    return (
+        normalized.includes('iniciando') ||
+        normalized.includes('cultivando') ||
+        normalized.includes('fazendo') ||
+        normalized.includes('revisita') ||
+        normalized.includes('demonstra') ||
+        normalized.includes('explicando') ||
+        normalized.includes('estudo bíblico') ||
+        normalized.includes('estudo biblico') ||
+        normalized.includes('conversas')
+    );
+};
+
+const isTimeMarker = (text: string): boolean => /\b\d{1,2}:\d{2}\b/.test(text);
+const isWeekHeading = (text: string): boolean => text.toUpperCase().includes('SEMANA');
+const isPartHeading = (text: string): boolean => /^\d+\./.test(text.trim());
+const isSectionBoundary = (text: string): boolean => {
+    const upper = text.toUpperCase();
+    return (
+        isTimeMarker(text) ||
+        isWeekHeading(text) ||
+        isPartHeading(text) ||
+        upper.startsWith('CÂNTICO') ||
+        upper.startsWith('CANTICO') ||
+        upper.startsWith('COMENT') ||
+        upper.startsWith('ORAÇÃO') ||
+        upper.startsWith('ORACAO') ||
+        upper.startsWith('PRESIDENTE') ||
+        upper.startsWith('DIRIGENTE') ||
+        upper.startsWith('LEITOR') ||
+        upper.startsWith('S-')
+    );
+};
+
+const isStudentHeaderLine = (text: string): boolean => /^ESTUDANTES?/i.test(text);
+const isHelperHeaderLine = (text: string): boolean => /^AJUDANTES?/i.test(text);
+const isLocationHeaderLine = (text: string): boolean => /(SAL[ÃA]O|SALA|AUDIT[ÓO]RIO)/i.test(text);
+
+const stripColumnLabel = (text: string): string => text.replace(/^(Estudantes?|Ajudantes?|Estudante|Ajudante)[:\s-]*/i, '').trim();
+
+const normalizeCandidateName = (name: string): string => name.replace(/\s+/g, ' ').trim();
+
+const assignPendingNames = (
+    names: string[],
+    queue: { partTitle: string }[],
+    participations: { partTitle: string; publisherName: string; order?: number }[],
+    orderGenerator: () => number,
+    isHelper = false
+) => {
+    if (!names.length || !queue.length) return;
+
+    for (const rawName of names) {
+        const normalized = normalizeCandidateName(rawName);
+        if (!normalized) continue;
+        const target = queue.shift();
+        if (!target) break;
+
+        if (isHelper) {
+            participations.push({ partTitle: 'Ajudante', publisherName: normalized, order: orderGenerator() });
+        } else {
+            participations.push({ partTitle: target.partTitle, publisherName: normalized, order: orderGenerator() });
+        }
+    }
+};
+
+const isStandaloneName = (text: string): boolean => {
+    if (!text) return false;
+    const trimmed = text.trim();
+    if (!trimmed) return false;
+    if (isSectionBoundary(trimmed) || isStudentHeaderLine(trimmed) || isHelperHeaderLine(trimmed) || isLocationHeaderLine(trimmed)) return false;
+    if (/min\)/i.test(trimmed) || /^\d+$/.test(trimmed)) return false;
+    return /[A-Za-zÀ-ÿ]/.test(trimmed);
+};
+
+const collectNamesAfterLine = (block: any[], startIndex: number, stopHeaders: string[] = []) => {
+    const names: string[] = [];
+    let idx = startIndex + 1;
+
+    while (idx < block.length) {
+        const candidate = block[idx].textWithSpaces.trim();
+        if (!candidate) {
+            idx++;
+            continue;
+        }
+
+        const upper = candidate.toUpperCase();
+        if (stopHeaders.some(header => upper.startsWith(header))) break;
+        if (isSectionBoundary(candidate) || isLocationHeaderLine(candidate)) break;
+        if (!isStandaloneName(candidate)) {
+            idx++;
+            continue;
+        }
+
+        names.push(candidate);
+        idx++;
+    }
+
+    return { names, nextIndex: idx - 1 };
+};
+
+const findNextNameLine = (block: any[], startIndex: number, stopHeaders: string[] = []) => {
+    let idx = startIndex + 1;
+    while (idx < block.length) {
+        const candidate = block[idx].textWithSpaces.trim();
+        if (!candidate) {
+            idx++;
+            continue;
+        }
+        const upper = candidate.toUpperCase();
+        if (stopHeaders.some(header => upper.startsWith(header))) break;
+        if (isSectionBoundary(candidate) || isLocationHeaderLine(candidate)) break;
+        if (isStandaloneName(candidate)) {
+            return { name: candidate, index: idx };
+        }
+        idx++;
+    }
+    return null;
+};
+
 export const parseHistoricPdf = async (file: File): Promise<HistoricalData[]> => {
     if (typeof pdfjsLib === 'undefined') {
         throw new Error('A biblioteca pdf.js não está carregada.');
@@ -147,7 +270,11 @@ export const parseHistoricPdf = async (file: File): Promise<HistoricalData[]> =>
 
             const weekLine = block[0].textWithSpaces;
             const normalizedWeek = standardizeWeekDate(weekLine, yearContext);
-            const participations: { partTitle: string; publisherName: string }[] = [];
+            const participations: { partTitle: string; publisherName: string; order?: number }[] = [];
+            const pendingStudentParts: { partTitle: string }[] = [];
+            const pendingHelperParts: { partTitle: string }[] = [];
+            let presidentName = '';
+            let runningOrder = 0;
 
             for (let l = 0; l < block.length; l++) {
                 const line = block[l];
@@ -157,13 +284,32 @@ export const parseHistoricPdf = async (file: File): Promise<HistoricalData[]> =>
                 // 1. Presidente e Oração
                 if (upperText.includes('PRESIDENTE:')) {
                     const parts = text.split(/Presidente:/i);
-                    if (parts[1]) participations.push({ partTitle: 'Presidente', publisherName: parts[1].trim() });
+                    if (parts[1]) {
+                        presidentName = parts[1].trim();
+                        participations.push({ partTitle: 'Presidente', publisherName: presidentName, order: runningOrder++ });
+                    }
                     continue;
                 }
                 if (upperText.includes('ORAÇÃO:')) {
                     const type = l < block.length / 2 ? 'Oração Inicial' : 'Oração Final';
                     const parts = text.split(/Oração:/i);
-                    if (parts[1]) participations.push({ partTitle: type, publisherName: parts[1].trim() });
+                    if (parts[1]) participations.push({ partTitle: type, publisherName: parts[1].trim(), order: runningOrder++ });
+                    continue;
+                }
+
+                if (upperText.startsWith('CÂNTICO') || upperText.startsWith('CANTICO')) {
+                    const canticoTitle = text.replace(/\s+/g, ' ').trim();
+                    participations.push({ partTitle: canticoTitle, publisherName: '', order: runningOrder++ });
+                    continue;
+                }
+
+                if (upperText.startsWith('COMENT')) {
+                    const parts = text.split(/Comentários?\s*finais:?/i);
+                    let commentOwner = parts[1]?.replace(/\(.*?\)/, '').trim();
+                    if (!commentOwner) commentOwner = presidentName;
+                    if (commentOwner) {
+                        participations.push({ partTitle: 'Comentários Finais', publisherName: commentOwner, order: runningOrder++ });
+                    }
                     continue;
                 }
 
@@ -174,6 +320,7 @@ export const parseHistoricPdf = async (file: File): Promise<HistoricalData[]> =>
                 if (partMatch) {
                     const rawTitle = partMatch[2].trim();
                     const partTitle = rawTitle; 
+                    const needsHelper = partNeedsHelper(partTitle);
                     
                     // Encontra onde termina a duração visualmente
                     let anchorX = 0;
@@ -198,14 +345,19 @@ export const parseHistoricPdf = async (file: File): Promise<HistoricalData[]> =>
                         }
                     }
 
+                    names = names.map(n => n.trim()).filter(Boolean);
                     if (names.length > 0) {
-                        if (names.length === 1) {
-                            participations.push({ partTitle, publisherName: names[0] });
-                        } else {
-                            // Assume Estudante (0) e Ajudante (1)
-                            participations.push({ partTitle, publisherName: names[0] });
-                            participations.push({ partTitle: 'Ajudante', publisherName: names[1] });
+                        participations.push({ partTitle, publisherName: names[0], order: runningOrder++ });
+                        if (needsHelper) {
+                            if (names[1]) {
+                                participations.push({ partTitle: 'Ajudante', publisherName: names[1], order: runningOrder++ });
+                            } else {
+                                pendingHelperParts.push({ partTitle });
+                            }
                         }
+                    } else {
+                        pendingStudentParts.push({ partTitle });
+                        if (needsHelper) pendingHelperParts.push({ partTitle });
                     }
                     continue;
                 }
@@ -214,16 +366,70 @@ export const parseHistoricPdf = async (file: File): Promise<HistoricalData[]> =>
                 if (upperText.includes('DIRIGENTE:') || upperText.includes('LEITOR:')) {
                     const dirMatch = text.match(/Dirigente:\s*([^Leitor]+)/i);
                     if (dirMatch) {
-                        participations.push({ partTitle: 'Estudo bíblico de congregação', publisherName: dirMatch[1].trim() });
+                        participations.push({ partTitle: 'Estudo bíblico de congregação', publisherName: dirMatch[1].trim(), order: runningOrder++ });
                     }
                     const leitMatch = text.match(/Leitor:\s*(.+)/i);
                     if (leitMatch) {
-                         participations.push({ partTitle: 'Leitor do EBC', publisherName: leitMatch[1].trim() });
+                         participations.push({ partTitle: 'Leitor do EBC', publisherName: leitMatch[1].trim(), order: runningOrder++ });
                     }
+                    continue;
+                }
+
+                if (upperText.startsWith('DIRIGENTE')) {
+                    const roleName = findNextNameLine(block, l, ['LEITOR', 'ORAÇÃO', 'ORACAO', 'CÂNTICO', 'CANTICO']);
+                    if (roleName) {
+                        participations.push({ partTitle: 'Estudo bíblico de congregação', publisherName: roleName.name, order: runningOrder++ });
+                        l = roleName.index;
+                    }
+                    continue;
+                }
+
+                if (upperText.startsWith('LEITOR')) {
+                    const roleName = findNextNameLine(block, l, ['DIRIGENTE', 'ORAÇÃO', 'ORACAO', 'CÂNTICO', 'CANTICO']);
+                    if (roleName) {
+                        participations.push({ partTitle: 'Leitor do EBC', publisherName: roleName.name, order: runningOrder++ });
+                        l = roleName.index;
+                    }
+                    continue;
+                }
+
+                if (isStudentHeaderLine(text.trim())) {
+                    const inlineName = stripColumnLabel(text);
+                    const names: string[] = [];
+                    if (inlineName && inlineName.toUpperCase() !== text.trim().toUpperCase()) names.push(inlineName);
+                    const collected = collectNamesAfterLine(block, l, ['AJUDANTE', 'AJUDANTES', 'DIRIGENTE', 'LEITOR']);
+                    names.push(...collected.names);
+                    assignPendingNames(names, pendingStudentParts, participations, () => runningOrder++, false);
+                    l = collected.nextIndex;
+                    continue;
+                }
+
+                if (isHelperHeaderLine(text.trim())) {
+                    const inlineName = stripColumnLabel(text);
+                    const names: string[] = [];
+                    if (inlineName && inlineName.toUpperCase() !== text.trim().toUpperCase()) names.push(inlineName);
+                    const collected = collectNamesAfterLine(block, l, ['ESTUDANTE', 'ESTUDANTES', 'DIRIGENTE', 'LEITOR']);
+                    names.push(...collected.names);
+                    assignPendingNames(names, pendingHelperParts, participations, () => runningOrder++, true);
+                    l = collected.nextIndex;
+                    continue;
+                }
+
+                if (isLocationHeaderLine(text.trim()) && pendingStudentParts.length > 0) {
+                    const collected = collectNamesAfterLine(block, l, ['ESTUDANTE', 'ESTUDANTES', 'AJUDANTE', 'AJUDANTES']);
+                    assignPendingNames(collected.names, pendingStudentParts, participations, () => runningOrder++, false);
+                    l = collected.nextIndex;
+                    continue;
+                }
+
+                if (pendingStudentParts.length > 0 && isStandaloneName(text)) {
+                    assignPendingNames([text], pendingStudentParts, participations, () => runningOrder++, false);
+                    continue;
                 }
             }
             
             if (participations.length > 0) {
+                participations.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
                 allWeeksData.push({ week: normalizedWeek, participations });
             }
         }

@@ -206,6 +206,11 @@ const App: React.FC = () => {
         await loadData();
     };
 
+    const partAllowsNamelessPublisher = (partTitle: string) => {
+        const title = partTitle.toLowerCase();
+        return title.includes('cântico') || title.includes('cantico');
+    };
+
     const handleImportHistoricalData = async (dataToImport: HistoricalData[]) => {
         const newParticipations: Participation[] = [];
         const publisherNameMap = new Map<string, Publisher>();
@@ -226,31 +231,40 @@ const App: React.FC = () => {
 
         for (const weekData of dataToImport) {
             for (const p of weekData.participations) {
-                if (!p.publisherName || !p.partTitle) continue;
+                if (!p.partTitle) continue;
 
-                const normalizedName = normalizeName(p.publisherName);
-                const foundPublisher = publisherNameMap.get(normalizedName);
-                
-                if (!foundPublisher) {
-                    console.warn(`Publicador "${p.publisherName}" não encontrado. Ignorando.`);
-                    continue;
+                const allowsNameless = partAllowsNamelessPublisher(p.partTitle);
+                const rawPublisherName = p.publisherName?.trim() ?? '';
+
+                if (!rawPublisherName && !allowsNameless) continue;
+
+                let resolvedPublisherName = '';
+
+                if (rawPublisherName) {
+                    const normalizedName = normalizeName(rawPublisherName);
+                    const foundPublisher = publisherNameMap.get(normalizedName);
+
+                    if (!foundPublisher) {
+                        console.warn(`Publicador "${p.publisherName}" não encontrado. Ignorando.`);
+                        continue;
+                    }
+                    resolvedPublisherName = foundPublisher.name;
                 }
 
-                const partKey = `${weekData.week}|${normalizeName(p.partTitle)}|${normalizeName(foundPublisher.name)}`;
-                
+                const partKey = `${weekData.week}|${normalizeName(p.partTitle)}|${normalizeName(resolvedPublisherName)}`;
                 if (existingKeys.has(partKey)) {
                     continue;
                 }
 
                 newParticipations.push({
                     id: generateUUID(),
-                    publisherName: foundPublisher.name,
+                    publisherName: resolvedPublisherName,
                     week: weekData.week,
                     partTitle: p.partTitle,
                     type: inferParticipationType(p.partTitle),
                     date: calculatePartDate(weekData.week)
                 });
-                
+
                 existingKeys.add(partKey);
             }
         }
