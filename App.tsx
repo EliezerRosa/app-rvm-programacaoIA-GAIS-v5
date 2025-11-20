@@ -213,7 +213,7 @@ const App: React.FC = () => {
 
     const handleImportHistoricalData = async (dataToImport: HistoricalData[]) => {
         const newParticipations: Participation[] = [];
-        const publisherNameMap = new Map<string, Publisher>();
+        const publisherNameMap = new Map<string, string>();
         const existingKeys = new Set<string>();
 
         for (const p of participations) {
@@ -221,10 +221,11 @@ const App: React.FC = () => {
         }
 
         for (const p of publishers) {
-            publisherNameMap.set(normalizeName(p.name), p);
+            const canonicalName = p.name;
+            publisherNameMap.set(normalizeName(canonicalName), canonicalName);
             if (p.aliases) {
                 for (const alias of p.aliases) {
-                    publisherNameMap.set(normalizeName(alias), p);
+                    publisherNameMap.set(normalizeName(alias), canonicalName);
                 }
             }
         }
@@ -242,13 +243,13 @@ const App: React.FC = () => {
 
                 if (rawPublisherName) {
                     const normalizedName = normalizeName(rawPublisherName);
-                    const foundPublisher = publisherNameMap.get(normalizedName);
-
-                    if (!foundPublisher) {
-                        console.warn(`Publicador "${p.publisherName}" não encontrado. Ignorando.`);
-                        continue;
+                    const canonicalName = publisherNameMap.get(normalizedName);
+                    if (canonicalName) {
+                        resolvedPublisherName = canonicalName;
+                    } else {
+                        resolvedPublisherName = rawPublisherName;
+                        publisherNameMap.set(normalizedName, rawPublisherName);
                     }
-                    resolvedPublisherName = foundPublisher.name;
                 }
 
                 const partKey = `${weekData.week}|${normalizeName(p.partTitle)}|${normalizeName(resolvedPublisherName)}`;
