@@ -104,6 +104,12 @@ const partNeedsHelper = (title: string): boolean => {
     );
 };
 
+const mapPartNumberToType = (partNumber: number): 'TESOUROS' | 'MINISTERIO' | 'VIDA_CRISTA' => {
+    if (partNumber <= 3) return 'TESOUROS';
+    if (partNumber <= 6) return 'MINISTERIO';
+    return 'VIDA_CRISTA';
+};
+
 const isTimeMarker = (text: string): boolean => /\b\d{1,2}:\d{2}\b/.test(text);
 const isWeekHeading = (text: string): boolean => text.toUpperCase().includes('SEMANA');
 const isPartHeading = (text: string): boolean => /^\d+\./.test(text.trim());
@@ -161,30 +167,6 @@ const isStandaloneName = (text: string): boolean => {
     if (!trimmed) return false;
     if (isSectionBoundary(trimmed) || isStudentHeaderLine(trimmed) || isHelperHeaderLine(trimmed) || isLocationHeaderLine(trimmed)) return false;
     if (/min\)/i.test(trimmed) || /^\d+$/.test(trimmed)) return false;
-    const detectDirigenteOrLeitorFromColumns = (
-        block: any[],
-        startIndex: number,
-        label: 'DIRIGENTE' | 'LEITOR',
-        runningOrderRef: { value: number },
-        participations: { partTitle: string; publisherName: string; order?: number }[],
-        pendingStudentParts: { partTitle: string }[]
-    ) => {
-        if (pendingStudentParts.length > 0) return;
-        const { names } = collectNamesAfterLine(block, startIndex, ['ESTUDANTE', 'ESTUDANTES', 'AJUDANTE', 'AJUDANTES', 'CÂNTICO', 'CANTICO']);
-        const targetName = names.find(name => !isSectionBoundary(name));
-        if (!targetName) return;
-        if (label === 'DIRIGENTE') {
-            participations.push({ partTitle: 'Estudo bíblico de congregação', publisherName: targetName, order: runningOrderRef.value++ });
-        } else {
-            participations.push({ partTitle: 'Leitor do EBC', publisherName: targetName, order: runningOrderRef.value++ });
-        }
-    };
-
-    const mapPartNumberToType = (partNumber: number): 'TESOUROS' | 'MINISTERIO' | 'VIDA_CRISTA' => {
-        if (partNumber <= 3) return 'TESOUROS';
-        if (partNumber <= 6) return 'MINISTERIO';
-        return 'VIDA_CRISTA';
-    };
     return /[A-Za-zÀ-ÿ]/.test(trimmed);
 };
 
@@ -212,6 +194,25 @@ const collectNamesAfterLine = (block: any[], startIndex: number, stopHeaders: st
     }
 
     return { names, nextIndex: idx - 1 };
+};
+
+const detectDirigenteOrLeitorFromColumns = (
+    block: any[],
+    startIndex: number,
+    label: 'DIRIGENTE' | 'LEITOR',
+    runningOrderRef: { value: number },
+    participations: { partTitle: string; publisherName: string; order?: number }[],
+    pendingStudentParts: { partTitle: string }[]
+) => {
+    if (pendingStudentParts.length > 0) return;
+    const { names } = collectNamesAfterLine(block, startIndex, ['ESTUDANTE', 'ESTUDANTES', 'AJUDANTE', 'AJUDANTES', 'CÂNTICO', 'CANTICO']);
+    const targetName = names.find(name => !isSectionBoundary(name));
+    if (!targetName) return;
+    if (label === 'DIRIGENTE') {
+        participations.push({ partTitle: 'Estudo bíblico de congregação', publisherName: targetName, order: runningOrderRef.value++ });
+    } else {
+        participations.push({ partTitle: 'Leitor do EBC', publisherName: targetName, order: runningOrderRef.value++ });
+    }
 };
 
 const findNextNameLine = (block: any[], startIndex: number, stopHeaders: string[] = []) => {
