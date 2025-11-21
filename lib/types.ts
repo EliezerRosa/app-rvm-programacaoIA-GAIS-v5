@@ -67,6 +67,8 @@ export interface Participation {
     partTitle: string;
     type: ParticipationType;
     duration?: number;
+    order?: number;
+    partNumber?: number | null;
 }
 
 export interface Workbook {

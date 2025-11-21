@@ -131,20 +131,46 @@ const App: React.FC = () => {
     const handleDeleteEventTemplate = (id: string) => { const t = eventTemplates.find(t => t.id === id); if (t) { setItemToDelete(t); setIsConfirmationModalOpen(true); } };
 
     const handleEditWeek = (m: MeetingData) => { setScheduleToEdit(m); setIsScheduleFormOpen(true); };
+
+    const handleCloseScheduleForm = () => {
+        setIsScheduleFormOpen(false);
+        setScheduleToEdit(null);
+    };
     
-    const handleSaveSchedule = async ({ parts, eventToUpdate, updatedWeek, originalWeek }: { parts: Participation[]; eventToUpdate?: SpecialEvent; updatedWeek: string; originalWeek: string }) => {
-        const weekChanged = updatedWeek && updatedWeek !== originalWeek;
-        const persistableParts = parts.map(part => {
-            if (!weekChanged) return part;
-            return { ...part, week: updatedWeek, date: calculatePartDate(updatedWeek) };
-        });
+    const handleSaveSchedule = async ({
+        parts,
+        deletedPartIds,
+        eventToUpdate,
+        updatedWeek,
+        originalWeek
+    }: {
+        parts: Participation[];
+        deletedPartIds: string[];
+        eventToUpdate?: SpecialEvent;
+        updatedWeek: string;
+        originalWeek: string;
+    }) => {
+        const targetWeek = updatedWeek || originalWeek;
+        const targetDate = calculatePartDate(targetWeek);
+
+        const persistableParts = parts.map(part => ({
+            ...part,
+            week: targetWeek,
+            date: targetDate
+        }));
+
         await Promise.all(persistableParts.map(p => saveParticipation(p)));
 
-        if (eventToUpdate || weekChanged) {
-            let eventPayload = eventToUpdate ? { ...eventToUpdate } : specialEvents.find(e => e.week === originalWeek);
-            if (eventPayload) {
-                if (weekChanged) eventPayload.week = updatedWeek;
-                await saveSpecialEvent(eventPayload);
+        if (deletedPartIds.length) {
+            await Promise.all(deletedPartIds.map(id => deleteParticipation(id)));
+        }
+
+        if (eventToUpdate) {
+            await saveSpecialEvent(eventToUpdate);
+        } else if (targetWeek !== originalWeek) {
+            const existingEvent = specialEvents.find(e => e.week === originalWeek);
+            if (existingEvent) {
+                await saveSpecialEvent({ ...existingEvent, week: targetWeek });
             }
         }
 
@@ -423,7 +449,7 @@ const App: React.FC = () => {
             <AiSchedulerModal isOpen={isAiSchedulerModalOpen} onClose={() => setIsAiSchedulerModalOpen(false)} onGenerate={handleGenerateAiSchedule} workbooks={workbooks} scheduledWeeks={scheduledWeeks} isGenerating={isGeneratingAiSchedule} />
             {aiScheduleResults && <AiScheduleResultsModal isOpen={!!aiScheduleResults} onClose={() => setAiScheduleResults(null)} onSave={handleSaveAiSchedule} results={aiScheduleResults} workbookName={currentAiWeek} />}
             <ConfirmationModal isOpen={isConfirmationModalOpen} onClose={() => setIsConfirmationModalOpen(false)} onConfirm={confirmDelete} title="Confirmar Exclusão" message={`Você tem certeza que deseja excluir ${getItemToDeleteDisplayName(itemToDelete)}? Esta ação não pode ser desfeita.`} />
-            <MeetingScheduleForm isOpen={isScheduleFormOpen} onClose={() => setIsScheduleFormOpen(false)} onSave={handleSaveSchedule} scheduleToEdit={scheduleToEdit} publishers={publishers} specialEvents={specialEvents} eventTemplates={eventTemplates} />
+            <MeetingScheduleForm isOpen={isScheduleFormOpen} onClose={handleCloseScheduleForm} onSave={handleSaveSchedule} scheduleToEdit={scheduleToEdit} publishers={publishers} specialEvents={specialEvents} eventTemplates={eventTemplates} />
             <SpecialEventsModal isOpen={isSpecialEventsModalOpen} onClose={() => setIsSpecialEventsModalOpen(false)} specialEvents={specialEvents} eventTemplates={eventTemplates} onSave={handleSaveSpecialEvent} onDelete={handleDeleteSpecialEvent} onManageTemplates={() => setIsTemplateManagerOpen(true)} />
             <EventTemplateManagerModal isOpen={isTemplateManagerOpen} onClose={() => setIsTemplateManagerOpen(false)} templates={eventTemplates} onSave={handleSaveEventTemplate} onDelete={handleDeleteEventTemplate} />
             <HistoricalDataModal isOpen={isHistoricalDataModalOpen} onClose={() => setIsHistoricalDataModalOpen(false)} onImport={handleImportHistoricalData} existingWeeks={scheduledWeeks} parsePdf={parseHistoricPdf} />
