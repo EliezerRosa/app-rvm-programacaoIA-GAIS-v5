@@ -98,7 +98,14 @@ export function getFullScheduleWithTimings(meetingData: MeetingData, publishers:
     const eventForWeek = specialEvents.find(e => e.week === meetingData.week);
     const templateForEvent = eventForWeek ? eventTemplates.find(t => t.id === eventForWeek.templateId) : undefined;
     
-    let parts = [...meetingData.parts];
+    const annotatedParts = meetingData.parts.map((part, index) => ({ part, index }));
+    annotatedParts.sort((a, b) => {
+        const orderA = typeof a.part.order === 'number' ? a.part.order : Number.MAX_SAFE_INTEGER;
+        const orderB = typeof b.part.order === 'number' ? b.part.order : Number.MAX_SAFE_INTEGER;
+        if (orderA !== orderB) return orderA - orderB;
+        return a.index - b.index;
+    });
+    let parts = annotatedParts.map(item => item.part);
 
     const processPart = (
         part: Participation | RenderablePart,
@@ -118,10 +125,11 @@ export function getFullScheduleWithTimings(meetingData: MeetingData, publishers:
             name = `${part.publisherName} / ${part.pair.publisherName}`;
         }
 
+        const hasNumber = typeof partNumber === 'number' && !isNaN(partNumber);
         timedEvents.push({
             id: part.id,
             startTime: formatTime(currentTime),
-            partTitle: partNumber ? `${partNumber}. ${title}` : title,
+            partTitle: hasNumber ? `${partNumber}. ${title}` : title,
             publisherName: name,
             durationText: duration > 0 ? `(${duration} min)` : '',
             sectionType: sectionType,
@@ -162,7 +170,9 @@ export function getFullScheduleWithTimings(meetingData: MeetingData, publishers:
     }
     
     treasuresParts.forEach(p => {
-        processPart(p, ParticipationType.TESOUROS, 10, partCounter++);
+        const fallbackNumber = partCounter++;
+        const displayNumber = typeof p.partNumber === 'number' ? p.partNumber : fallbackNumber;
+        processPart(p, ParticipationType.TESOUROS, 10, displayNumber);
         const isBibleReading = p.partTitle.toLowerCase().includes('leitura da bíblia');
         if (isBibleReading && president) {
              timedEvents.push({ id: `counsel-${p.id}`, startTime: formatTime(currentTime), partTitle: 'Aconselhamento', publisherName: president.publisherName, durationText: '(1 min)', sectionType: ParticipationType.TESOUROS, isCounseling: true });
@@ -173,7 +183,9 @@ export function getFullScheduleWithTimings(meetingData: MeetingData, publishers:
     if (middleSong) processPart(middleSong, 'TRANSITION', 3);
     
     ministryParts.forEach(p => {
-        processPart(p, ParticipationType.MINISTERIO, 5, partCounter++);
+        const fallbackNumber = partCounter++;
+        const displayNumber = typeof p.partNumber === 'number' ? p.partNumber : fallbackNumber;
+        processPart(p, ParticipationType.MINISTERIO, 5, displayNumber);
          if (president) {
              timedEvents.push({ id: `counsel-${p.id}`, startTime: formatTime(currentTime), partTitle: 'Aconselhamento', publisherName: president.publisherName, durationText: '(1 min)', sectionType: ParticipationType.MINISTERIO, isCounseling: true });
             currentTime = addMinutes(currentTime, 1);
@@ -181,9 +193,19 @@ export function getFullScheduleWithTimings(meetingData: MeetingData, publishers:
     });
 
     // Sort life parts to ensure study is last if present
-    lifeParts.sort((a,b) => (a.type === ParticipationType.DIRIGENTE ? 1 : -1) - (b.type === ParticipationType.DIRIGENTE ? 1: -1) ).forEach(p => processPart(p, p.type, 15, partCounter++));
+    lifeParts
+        .sort((a,b) => (a.type === ParticipationType.DIRIGENTE ? 1 : -1) - (b.type === ParticipationType.DIRIGENTE ? 1: -1) )
+        .forEach(p => {
+            const fallbackNumber = partCounter++;
+            const displayNumber = typeof p.partNumber === 'number' ? p.partNumber : fallbackNumber;
+            processPart(p, p.type, 15, displayNumber);
+        });
 
-    if (finalCommentsPart) processPart(finalCommentsPart, 'CLOSING', 3, partCounter++);
+    if (finalCommentsPart) {
+        const fallbackNumber = partCounter++;
+        const displayNumber = typeof finalCommentsPart.partNumber === 'number' ? finalCommentsPart.partNumber : fallbackNumber;
+        processPart(finalCommentsPart, 'CLOSING', 3, displayNumber);
+    }
     if (finalSong) processPart(finalSong, 'CLOSING', 3);
     if (closingPrayer) processPart(closingPrayer, 'CLOSING', 1);
 
@@ -192,16 +214,25 @@ export function getFullScheduleWithTimings(meetingData: MeetingData, publishers:
 
 
 export function getOrderedAndPairedParts(parts: Participation[], publishers: Publisher[]): RenderablePart[] {
+    const annotated = parts.map((part, index) => ({ part, index }));
+    annotated.sort((a, b) => {
+        const orderA = typeof a.part.order === 'number' ? a.part.order : Number.MAX_SAFE_INTEGER;
+        const orderB = typeof b.part.order === 'number' ? b.part.order : Number.MAX_SAFE_INTEGER;
+        if (orderA !== orderB) return orderA - orderB;
+        return a.index - b.index;
+    });
+    const sortedParts = annotated.map(item => item.part);
+
     const paired: RenderablePart[] = [];
     const usedPairIds = new Set<string>();
 
-    for (const currentPart of parts) {
+    for (const currentPart of sortedParts) {
         if (usedPairIds.has(currentPart.id) || [ParticipationType.AJUDANTE, ParticipationType.LEITOR].includes(currentPart.type)) {
             continue;
         }
         
         if (currentPart.type === ParticipationType.MINISTERIO && !currentPart.partTitle.toLowerCase().includes('discurso')) {
-            const helper = parts.find(p => p.type === ParticipationType.AJUDANTE && !usedPairIds.has(p.id));
+            const helper = sortedParts.find(p => p.type === ParticipationType.AJUDANTE && !usedPairIds.has(p.id));
             if (helper) {
                 paired.push({ ...currentPart, pair: helper });
                 usedPairIds.add(helper.id);
@@ -209,7 +240,7 @@ export function getOrderedAndPairedParts(parts: Participation[], publishers: Pub
                 paired.push(currentPart);
             }
         } else if (currentPart.type === ParticipationType.DIRIGENTE) {
-            const reader = parts.find(p => p.type === ParticipationType.LEITOR && !usedPairIds.has(p.id));
+            const reader = sortedParts.find(p => p.type === ParticipationType.LEITOR && !usedPairIds.has(p.id));
             if (reader) {
                 paired.push({ ...currentPart, pair: reader });
                 usedPairIds.add(reader.id);
