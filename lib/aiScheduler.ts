@@ -69,6 +69,68 @@ const responseSchema = {
     }
 };
 
+const serializableResponseSchema = JSON.parse(JSON.stringify(responseSchema));
+
+const extractTextFromResponse = (response: any): string => {
+    return (
+        response?.response?.text?.() ??
+        response?.text?.() ??
+        ((response?.response?.candidates ?? [])
+            .flatMap((candidate: any) => candidate?.content?.parts ?? [])
+            .map((part: any) => part?.text ?? '')
+            .join(''))
+    );
+};
+
+const getAiResponseText = async (prompt: string): Promise<string> => {
+    if (process.env.API_KEY) {
+        const ai = getAiInstance();
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: [
+                {
+                    role: 'user',
+                    parts: [{ text: prompt.trim() }]
+                }
+            ],
+            generationConfig: {
+                responseMimeType: "application/json",
+                responseSchema
+            }
+        });
+        const rawText = extractTextFromResponse(response);
+        if (!rawText) {
+            throw new Error('Resposta vazia do modelo de IA.');
+        }
+        return rawText;
+    }
+
+    const proxyUrl = process.env.AI_PROXY_URL;
+    if (!proxyUrl) {
+        throw new Error('Nenhuma estratégia de IA configurada. Informe GEMINI_API_KEY ou AI_PROXY_URL.');
+    }
+
+    const proxyResponse = await fetch(proxyUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: prompt.trim(), responseSchema: serializableResponseSchema })
+    });
+
+    if (!proxyResponse.ok) {
+        const errorPayload = await proxyResponse.text();
+        console.error('Falha no proxy de IA:', proxyResponse.status, errorPayload);
+        throw new Error('O proxy de IA retornou um erro.');
+    }
+
+    const proxyData = await proxyResponse.json();
+    const rawText = proxyData.text ?? proxyData.rawText ?? proxyData.responseText;
+    if (!rawText) {
+        console.error('Resposta inesperada do proxy de IA:', proxyData);
+        throw new Error('Resposta vazia do proxy de IA.');
+    }
+    return rawText;
+};
+
 export async function generateAiSchedule(
     workbook: Workbook,
     week: string,
@@ -79,7 +141,6 @@ export async function generateAiSchedule(
     eventTemplates: EventTemplate[]
 ): Promise<AiScheduleResult[]> {
     try {
-        const ai = getAiInstance();
         const partsToFill = await getPartsFromWorkbook(workbook, specialEvents, eventTemplates, week);
         const meetingDate = calculatePartDate(week).split('T')[0];
 
@@ -117,8 +178,15 @@ export async function generateAiSchedule(
             **4. Formato da Resposta:** JSON array com partTitle, studentName, helperName.
         `;
         
-        const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt, config: { responseMimeType: "application/json", responseSchema } });
-        const suggestedAssignments: { partTitle: string; studentName: string; helperName: string; }[] = JSON.parse(response.text.trim());
+        const rawResponseText = await getAiResponseText(prompt);
+
+        let suggestedAssignments: { partTitle: string; studentName: string; helperName: string; }[];
+        try {
+            suggestedAssignments = JSON.parse(rawResponseText.trim());
+        } catch (parseError) {
+            console.error('Falha ao interpretar resposta do modelo como JSON:', rawResponseText, parseError);
+            throw new Error('A resposta do modelo não está em JSON válido.');
+        }
 
         const validatedAssignments: AiScheduleResult[] = [];
         for (const assignment of suggestedAssignments) {

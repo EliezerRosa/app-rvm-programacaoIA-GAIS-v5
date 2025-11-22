@@ -13,17 +13,43 @@ Veja o app no AI Studio: <https://ai.studio/apps/drive/11l9oAhdWDXN-ZOPUznLwqPZp
 
 1. Instale as dependências:
    `npm install`
-2. Copie `.env.example` para `.env.local` e preencha `GEMINI_API_KEY` com a sua chave do Gemini (arquivo ignorado pelo Git – nunca commite sua chave).
+2. Copie `.env.example` para `.env.local` e defina ao menos um dos valores abaixo:
+   - `GEMINI_API_KEY`: use somente em ambiente local, pois a chave fica exposta no bundle.
+   - `AI_PROXY_URL`: URL do worker/proxy que protegerá a chave em produção (veja a seção **Proxy via Cloudflare Workers**).
 3. Execute o app:
    `npm run dev`
 
-### Configurar a chave no GitHub (deploy)
+Quando `GEMINI_API_KEY` não estiver disponível, o app usará automaticamente `AI_PROXY_URL` para chamar o proxy seguro.
 
-1. Abra **Settings → Secrets and variables → Actions** no repositório e clique em **New repository secret**.
-2. Informe `GEMINI_API_KEY` como nome e cole a mesma chave utilizada localmente.
-3. Salve. O workflow `Deploy to GitHub Pages` já exporta esse secret para `npm run build`, portanto nenhuma etapa extra é necessária.
+### Configurar as chaves no GitHub (deploy)
 
-> **Importante:** sem `GEMINI_API_KEY` o build local apenas exibirá um aviso, mas no GitHub Actions ele falhará imediatamente para evitar publicar uma versão sem IA funcional.
+1. Abra **Settings → Secrets and variables → Actions** e clique em **New repository secret**.
+2. Cadastre `GEMINI_API_KEY` (opcional em produção) e `AI_PROXY_URL` (obrigatório para o proxy) com os mesmos valores usados localmente.
+3. O workflow `Deploy to GitHub Pages` já exporta esses secrets para `npm run build`, então nenhuma etapa adicional é necessária.
+
+> **Importante:** sem `GEMINI_API_KEY` o build local apenas exibirá um aviso, mas no GitHub Actions ele depende de pelo menos um dos dois valores. Caso só use o proxy, garanta que `AI_PROXY_URL` esteja definido.
+
+## Proxy via Cloudflare Workers (recomendado para produção)
+
+O diretório [`worker/`](worker/) contém um Worker pronto (`ai-scheduler-proxy.ts`) que chama o Gemini e expõe somente um endpoint seguro para o front-end.
+
+1. Instale o Wrangler: <https://developers.cloudflare.com/workers/wrangler/install-and-update/>.
+2. Dentro de `worker/`, copie `wrangler.example.toml` para `wrangler.toml` e ajuste o nome do serviço, se desejar.
+3. Configure o segredo no Worker:
+
+   ```bash
+   wrangler secret put GEMINI_API_KEY
+   ```
+
+4. Faça o deploy:
+
+   ```bash
+   wrangler deploy
+   ```
+
+5. Copie a URL pública retornada (ex.: `https://ai-scheduler-proxy.yourname.workers.dev`) e configure-a em `AI_PROXY_URL` no `.env.local`, nos secrets do GitHub Actions e/ou em qualquer ambiente onde o app será servido.
+
+Com isso o bundle publicado no GitHub Pages permanece totalmente estático e o segredo do Gemini fica protegido dentro do Worker.
 
 ## Automatizar commit + PR + deploy
 

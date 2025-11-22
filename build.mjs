@@ -25,6 +25,7 @@ async function build() {
 
     const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || '';
     const isCi = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
+    const aiProxyUrl = process.env.AI_PROXY_URL || '';
     if (!apiKey) {
         const message = 'A variável de ambiente GEMINI_API_KEY não foi definida. Configure-a em .env.local (desenvolvimento) ou como GitHub Secret para builds.';
         if (isCi) {
@@ -44,7 +45,8 @@ async function build() {
       loader: { '.tsx': 'tsx', '.ts': 'ts' },
       define: {
         'process.env.NODE_ENV': '"production"',
-        'process.env.API_KEY': `"${apiKey}"`
+        'process.env.API_KEY': `"${apiKey}"`,
+        'process.env.AI_PROXY_URL': `"${aiProxyUrl}"`
       },
     });
     console.log('JS compilado com sucesso.');

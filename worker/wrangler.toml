@@ -1,0 +1,6 @@
+name = "ai-scheduler-proxy"
+main = "ai-scheduler-proxy.ts"
+compatibility_date = "2024-11-22"
+
+[vars]
+# Configure via `wrangler secret put GEMINI_API_KEY`
