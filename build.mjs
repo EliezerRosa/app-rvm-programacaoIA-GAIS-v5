@@ -22,9 +22,15 @@ async function build() {
     if (!process.env.API_KEY && process.env.GEMINI_API_KEY) {
       process.env.API_KEY = process.env.GEMINI_API_KEY;
     }
+
     const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || '';
+    const isCi = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
     if (!apiKey) {
-        console.warn('AVISO: A variável de ambiente GEMINI_API_KEY não foi definida. As funções de IA podem falhar.');
+        const message = 'A variável de ambiente GEMINI_API_KEY não foi definida. Configure-a em .env.local (desenvolvimento) ou como GitHub Secret para builds.';
+        if (isCi) {
+            throw new Error(message);
+        }
+        console.warn(`AVISO: ${message}`);
     }
 
     // 3. Compila o JavaScript (Bundle)

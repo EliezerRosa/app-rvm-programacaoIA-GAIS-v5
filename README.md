@@ -13,9 +13,17 @@ Veja o app no AI Studio: <https://ai.studio/apps/drive/11l9oAhdWDXN-ZOPUznLwqPZp
 
 1. Instale as dependências:
    `npm install`
-2. Defina `GEMINI_API_KEY` em [.env.local](.env.local) com a sua chave do Gemini (apenas para desenvolvimento local). Em CI/CD use os *repository secrets* (`Settings > Secrets and variables > Actions`).
+2. Copie `.env.example` para `.env.local` e preencha `GEMINI_API_KEY` com a sua chave do Gemini (arquivo ignorado pelo Git – nunca commite sua chave).
 3. Execute o app:
    `npm run dev`
+
+### Configurar a chave no GitHub (deploy)
+
+1. Abra **Settings → Secrets and variables → Actions** no repositório e clique em **New repository secret**.
+2. Informe `GEMINI_API_KEY` como nome e cole a mesma chave utilizada localmente.
+3. Salve. O workflow `Deploy to GitHub Pages` já exporta esse secret para `npm run build`, portanto nenhuma etapa extra é necessária.
+
+> **Importante:** sem `GEMINI_API_KEY` o build local apenas exibirá um aviso, mas no GitHub Actions ele falhará imediatamente para evitar publicar uma versão sem IA funcional.
 
 ## Automatizar commit + PR + deploy
 
