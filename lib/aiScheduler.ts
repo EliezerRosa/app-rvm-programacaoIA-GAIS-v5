@@ -71,6 +71,19 @@ const responseSchema = {
 
 const serializableResponseSchema = JSON.parse(JSON.stringify(responseSchema));
 
+const sanitizeJsonPayload = (raw: string): string => {
+    if (!raw) return '';
+    let cleaned = raw.trim();
+
+    const fencedMatch = cleaned.match(/```json([\s\S]*?)```/i) || cleaned.match(/```([\s\S]*?)```/i);
+    if (fencedMatch?.[1]) {
+        cleaned = fencedMatch[1].trim();
+    }
+
+    cleaned = cleaned.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
+    return cleaned;
+};
+
 const extractTextFromResponse = (response: any): string => {
     const callText = (target: any): string => {
         if (!target || !('text' in target)) return '';
@@ -198,7 +211,8 @@ export async function generateAiSchedule(
 
         let suggestedAssignments: { partTitle: string; studentName: string; helperName: string; }[];
         try {
-            suggestedAssignments = JSON.parse(rawResponseText.trim());
+            const sanitized = sanitizeJsonPayload(rawResponseText);
+            suggestedAssignments = JSON.parse(sanitized);
         } catch (parseError) {
             console.error('Falha ao interpretar resposta do modelo como JSON:', rawResponseText, parseError);
             throw new Error('A resposta do modelo não está em JSON válido.');
