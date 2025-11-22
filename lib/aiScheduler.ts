@@ -231,6 +231,11 @@ export async function generateAiSchedule(
             normalizedTitle: normalizeText(part.partTitle)
         }));
 
+        const publishersLookup = publishers.map(publisher => ({
+            publisher,
+            normalizedName: normalizeText(publisher.name)
+        }));
+
         const findMatchingPart = (title: string) => {
             const normalized = normalizeText(title);
             if (!normalized) return null;
@@ -243,10 +248,22 @@ export async function generateAiSchedule(
             )?.part || null;
         };
 
+        const findPublisherByName = (name: string) => {
+            const normalized = normalizeText(name);
+            if (!normalized) return null;
+
+            const directMatch = publishersLookup.find(entry => entry.normalizedName === normalized)?.publisher;
+            if (directMatch) return directMatch;
+
+            return publishersLookup.find(entry =>
+                entry.normalizedName.includes(normalized) || normalized.includes(entry.normalizedName)
+            )?.publisher || null;
+        };
+
         const validatedAssignments: AiScheduleResult[] = [];
         for (const assignment of suggestedAssignments) {
             // ... (Lógica de validação robusta)
-            const student = publishers.find(p => p.name === assignment.studentName);
+            const student = findPublisherByName(assignment.studentName);
             const part = findMatchingPart(assignment.partTitle);
             if (!student || !part) continue;
 
