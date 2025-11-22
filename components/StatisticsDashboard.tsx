@@ -171,6 +171,14 @@ const EvolutionChart: React.FC<{ data: MonthData[] }> = ({ data }) => {
     const pointsForgotten = data.map((d, i) => `${getX(i)},${getY(d.forgottenCount)}`).join(' ');
     const pointsInactive = data.map((d, i) => `${getX(i)},${getY(d.inactiveCount)}`).join(' ');
 
+    const buildPathFromPoints = (points: string) => {
+        if (!points) return '';
+        const segments = points.trim().split(/\s+/);
+        const [first, ...rest] = segments;
+        if (!first) return '';
+        return ['M ' + first, ...rest.map(seg => 'L ' + seg)].join(' ');
+    };
+
     return (
         <div className="w-full h-full relative group select-none">
             {/* Legend */}
@@ -196,7 +204,7 @@ const EvolutionChart: React.FC<{ data: MonthData[] }> = ({ data }) => {
                 <polyline points={pointsTotal} fill="none" stroke="#4F46E5" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="drop-shadow-md" />
                 
                 {/* Fill Area Total */}
-                <path d={`${pointsTotal} L ${getX(data.length - 1)},${getY(0)} L ${getX(0)},${getY(0)} Z`} fill="url(#gradientTotal)" opacity="0.1" />
+                <path d={`${buildPathFromPoints(pointsTotal)} L ${getX(data.length - 1)},${getY(0)} L ${getX(0)},${getY(0)} Z`} fill="url(#gradientTotal)" opacity="0.1" />
                 
                 <defs>
                     <linearGradient id="gradientTotal" x1="0" x2="0" y1="0" y2="1">
