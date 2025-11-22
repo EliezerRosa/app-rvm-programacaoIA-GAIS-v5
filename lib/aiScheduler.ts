@@ -71,6 +71,14 @@ const responseSchema = {
 
 const serializableResponseSchema = JSON.parse(JSON.stringify(responseSchema));
 
+const normalizeText = (value: string): string =>
+    (value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase();
+
 const sanitizeJsonPayload = (raw: string): string => {
     if (!raw) return '';
     let cleaned = raw.trim();
@@ -218,11 +226,28 @@ export async function generateAiSchedule(
             throw new Error('A resposta do modelo não está em JSON válido.');
         }
 
+        const partsLookup = partsToFill.map(part => ({
+            part,
+            normalizedTitle: normalizeText(part.partTitle)
+        }));
+
+        const findMatchingPart = (title: string) => {
+            const normalized = normalizeText(title);
+            if (!normalized) return null;
+
+            const directMatch = partsLookup.find(entry => entry.normalizedTitle === normalized)?.part;
+            if (directMatch) return directMatch;
+
+            return partsLookup.find(entry =>
+                entry.normalizedTitle.includes(normalized) || normalized.includes(entry.normalizedTitle)
+            )?.part || null;
+        };
+
         const validatedAssignments: AiScheduleResult[] = [];
         for (const assignment of suggestedAssignments) {
             // ... (Lógica de validação robusta)
             const student = publishers.find(p => p.name === assignment.studentName);
-            const part = partsToFill.find(p => p.partTitle === assignment.partTitle);
+            const part = findMatchingPart(assignment.partTitle);
             if (!student || !part) continue;
 
             const studentValidation = validateAssignment({ publisher: student, partType: part.type, partTitle: part.partTitle, meetingDate }, rules);
