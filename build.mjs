@@ -53,6 +53,7 @@ async function build() {
 
     // 4. Processa o index.html
     let htmlContent = await fs.readFile('index.html', 'utf-8');
+    const cacheBuster = Date.now().toString();
     
     // Remove o importmap (não necessário pois estamos empacotando tudo)
     htmlContent = htmlContent.replace(/<script type="importmap">[\s\S]*?<\/script>/, '');
@@ -60,7 +61,7 @@ async function build() {
     // Substitui a chamada do módulo pelo bundle gerado
     htmlContent = htmlContent.replace(
       /<script type="module" src="\/index.tsx"><\/script>/,
-      '<script src="bundle.js"></script>'
+      `<script src="bundle.js?v=${cacheBuster}"></script>`
     );
     
     await fs.writeFile(path.join(distDir, 'index.html'), htmlContent);
