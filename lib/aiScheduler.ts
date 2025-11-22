@@ -72,14 +72,30 @@ const responseSchema = {
 const serializableResponseSchema = JSON.parse(JSON.stringify(responseSchema));
 
 const extractTextFromResponse = (response: any): string => {
-    return (
-        response?.response?.text?.() ??
-        response?.text?.() ??
-        ((response?.response?.candidates ?? [])
-            .flatMap((candidate: any) => candidate?.content?.parts ?? [])
-            .map((part: any) => part?.text ?? '')
-            .join(''))
-    );
+    const callText = (target: any): string => {
+        if (!target || !('text' in target)) return '';
+        const value = target.text;
+        if (typeof value === 'function') {
+            try {
+                return value.call(target);
+            } catch (err) {
+                console.warn('Falha ao executar text():', err);
+                return '';
+            }
+        }
+        if (typeof value === 'string') {
+            return value;
+        }
+        return '';
+    };
+
+    const direct = callText(response?.response) || callText(response);
+    if (direct) return direct;
+
+    return ((response?.response?.candidates ?? [])
+        .flatMap((candidate: any) => candidate?.content?.parts ?? [])
+        .map((part: any) => part?.text ?? '')
+        .join(''));
 };
 
 const getAiResponseText = async (prompt: string): Promise<string> => {
