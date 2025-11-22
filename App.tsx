@@ -329,7 +329,10 @@ const App: React.FC = () => {
         return 'este item';
     };
 
-    const handleOpenPrintableView = (m: MeetingData) => openHtmlInNewTab(getScheduleHtml(m, "Vila Velha - Central", publishers, specialEvents, eventTemplates));
+    const handleOpenPrintableView = (m: MeetingData) =>
+        openHtmlInNewTab(
+            getScheduleHtml(m, "Parque Jacaraípe, Serra - ES", publishers, specialEvents, eventTemplates)
+        );
     const handleExportData = async () => {
         const data = await getAllData();
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
